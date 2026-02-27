@@ -1,0 +1,5 @@
+Solution Overview
+1) Surface Modeling: Define the mathematical shape of the vessel (the "Target Surface").
+2) Mapping (Forward): Wrap the 2D pattern around the 3D model to ensure the geometry looks correct and the patterns meet seamlessly at the seam.
+3) Flattening (Inverse): Project the 3D coordinates back into a 2D plane. If the vessel is a "developable surface" (like a cylinder or cone), this will be mathematically perfect. If it has complex curves, we will need to calculate the "stretch" so it fits the real-world clay.
+4) Export: Generate an SVG or DXF file for the vinyl cutter.
