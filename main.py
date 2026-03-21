@@ -5,32 +5,31 @@ import os
 from vessel import TaperedVessel
 from processor import PatternProcessor
 
+
 def validate_csv(df):
-    """Ensure the CSV has the required columns and at least two points."""
     required = {'arc_length', 'circumference'}
     if not required.issubset(df.columns):
         raise ValueError(f"CSV must contain columns: {required}")
     if len(df) < 2:
-        raise ValueError("Vessel requires at least two measurement points (top and bottom).")
+        raise ValueError("Vessel requires at least two measurement points.")
+
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Coding Partner's Pottery Pattern Mapper",
+        description="Pottery Pattern Mapper",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    
-    # Required Arguments
-    parser.add_argument("pattern", help="Path to the source pattern image (single tile)")
-    parser.add_argument("measurements", help="Path to CSV file with vessel measurements")
-    
-    # Optional Arguments
-    parser.add_argument("--tiles", type=int, default=10, help="Number of horizontal tiles around the rim")
-    parser.add_argument("--output", default="unwrapped_guide.png", help="Name of the output image file")
-    parser.add_argument("--dpi", type=int, default=300, help="DPI for the printable output")
+    parser.add_argument("pattern",      help="Source pattern image (single tile)")
+    parser.add_argument("measurements", help="CSV with arc_length, circumference")
+    parser.add_argument("--tiles", type=int, default=10,
+                        help="Number of horizontal tiles around the rim")
+    parser.add_argument("--dpi",   type=int, default=300,
+                        help="Output resolution in DPI")
+    parser.add_argument("--slice", action="store_true",
+                        help="Output a single flat tile slice (debug mode)")
 
     args = parser.parse_args()
 
-    # 1. File Check
     if not os.path.exists(args.pattern):
         print(f"Error: Pattern image '{args.pattern}' not found.")
         sys.exit(1)
@@ -39,47 +38,43 @@ def main():
         sys.exit(1)
 
     try:
-        # 2. Load and Validate Measurements
         df = pd.read_csv(args.measurements)
         validate_csv(df)
-        
-        # We take the first and last points for the trapezoid calculation
-        c_top = df.iloc[0]['circumference']
-        c_bottom = df.iloc[-1]['circumference']
-        slant = df.iloc[-1]['arc_length'] - df.iloc[0]['arc_length']
 
-        # 3. Initialize Engines
-        vessel = TaperedVessel(c_top, c_bottom, slant)
+        pattern_base = os.path.splitext(os.path.basename(args.pattern))[0]
+        vessel_base  = os.path.splitext(os.path.basename(args.measurements))[0]
+        base_filename = f"{pattern_base}_{vessel_base}_{args.tiles}tiles"
+
+        vessel    = TaperedVessel(df)
         processor = PatternProcessor(args.pattern, args.tiles)
 
-        # 4. Execute Rendering
         print(f"--- Processing Vessel ---")
-        print(f"Rim: {c_top}mm | Base: {c_bottom}mm | Height: {slant}mm")
-        print(f"Tiling: {args.tiles} horizontal tiles (proportional vertical height)")
-        
-        result_img = processor.render(vessel, dpi=args.dpi)
-        
-        # 5. Save Output
-        result_img.save(args.output, dpi=(args.dpi, args.dpi))
-        print(f"--- Success! ---")
-        print(f"Guide saved as: {args.output}")
-        
-        # Save as PDF for precise printing
-        pdf_output = args.output.replace('.png', '.pdf')
-        if not pdf_output.endswith('.pdf'):
-            pdf_output += '.pdf'
-            
-        # Convert to RGB for PDF compatibility (removes transparency)
-        pdf_img = result_img.convert("RGB")
-        pdf_img.save(pdf_output, resolution=args.dpi, save_all=True)
-        
-        print(f"--- Success! ---")
-        print(f"Image: {args.output}")
-        print(f"Print-ready PDF: {pdf_output}")
-        
+        print(f"Top: {vessel.c_top}mm | Bottom: {vessel.c_bottom}mm | "
+              f"Height: {vessel.s_total}mm")
+        print(f"Tiles: {args.tiles}")
+
+        if args.slice:
+            print("Rendering single slice (debug mode)...")
+            result_img = processor.render_slice(vessel, dpi=args.dpi)
+            png_out = f"{base_filename}_slice.png"
+            result_img.save(png_out, dpi=(args.dpi, args.dpi))
+            print(f"Slice saved: {png_out}")
+        else:
+            print("Rendering full fan...")
+            result_img = processor.render(vessel, dpi=args.dpi)
+            png_out = f"{base_filename}.png"
+            pdf_out = f"{base_filename}.pdf"
+            result_img.save(png_out, dpi=(args.dpi, args.dpi))
+            result_img.convert("RGB").save(pdf_out, resolution=args.dpi,
+                                           save_all=True)
+            print(f"--- Success! ---")
+            print(f"Image: {png_out}")
+            print(f"PDF:   {pdf_out}")
+
     except Exception as e:
         print(f"Critical Error: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
